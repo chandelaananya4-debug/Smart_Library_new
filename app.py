@@ -13,36 +13,57 @@ DATA_FILE = Path(__file__).with_name("books.csv")
 
 # Load books from CSV
 def load_books():
-    
-def load_books():
     df = pd.read_csv(DATA_FILE)
 
     # Clean column names
-    df.columns = df.columns.str.strip().str.lower()
+    df.columns = (
+        df.columns.str.strip()
+        .str.lower()
+        .str.replace(" ", "_")
+    )
 
-    # Handle alternative ID column names
+    # Rename CSV columns to match the application
     df.rename(columns={
         "book_id": "id",
-        "book id": "id"
+        "total_copies": "total",
+        "available_copies": "available"
     }, inplace=True)
 
-    # Create ID column if it is missing
+    # Check required columns
     if "id" not in df.columns:
         df.insert(0, "id", range(1, len(df) + 1))
 
-    # Ensure required columns exist
+    if "title" not in df.columns:
+        df["title"] = ""
+
+    if "author" not in df.columns:
+        df["author"] = ""
+
+    if "category" not in df.columns:
+        df["category"] = ""
+
     if "total" not in df.columns:
         df["total"] = 0
 
     if "available" not in df.columns:
         df["available"] = df["total"]
 
+    if "publication_year" not in df.columns:
+        df["publication_year"] = ""
+
     # Convert numeric columns
     for col in ["id", "total", "available"]:
-        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0).astype(int)
+        df[col] = (
+            pd.to_numeric(df[col], errors="coerce")
+            .fillna(0)
+            .astype(int)
+        )
+
+    # Clean text columns
+    for col in ["title", "author", "category"]:
+        df[col] = df[col].fillna("").astype(str)
 
     return df
-
 
 
 # Save books to CSV
@@ -58,14 +79,14 @@ def index():
     search = request.args.get("q", "").strip()
     category = request.args.get("cat", "").strip()
 
-    # Search books
+    # Search books by title or author
     if search:
         df = df[
             df["title"].str.contains(search, case=False, na=False)
             | df["author"].str.contains(search, case=False, na=False)
         ]
 
-    # Filter category
+    # Filter books by category
     if category:
         df = df[df["category"] == category]
 
@@ -81,7 +102,7 @@ def index():
         "titles": len(all_books)
     }
 
-    # List of categories
+    # Get book categories
     categories = sorted(
         all_books["category"].dropna().unique().tolist()
     )
@@ -145,21 +166,31 @@ def add_book():
     df = load_books()
 
     try:
-        new_id = int(df["id"].max()) + 1 if not df.empty else 1
+        title = request.form.get("title", "").strip()
+        author = request.form.get("author", "").strip()
+        category = request.form.get("category", "").strip()
 
-        total = max(1, int(request.form.get("total", 1)))
+        if not title or not author or not category:
+            raise ValueError("All fields are required")
+
+        total = int(request.form.get("total", 1))
+
+        if total < 1:
+            raise ValueError("Total copies must be at least 1")
+
+        new_id = int(df["id"].max()) + 1 if not df.empty else 1
 
         new_book = {
             "id": new_id,
-            "title": request.form["title"].strip(),
-            "author": request.form["author"].strip(),
-            "category": request.form["category"].strip(),
+            "title": title,
+            "author": author,
+            "category": category,
+            "publication_year": request.form.get(
+                "publication_year", ""
+            ).strip(),
             "total": total,
             "available": total
         }
-
-        if not new_book["title"] or not new_book["author"] or not new_book["category"]:
-            raise ValueError("All fields are required")
 
         df = pd.concat(
             [df, pd.DataFrame([new_book])],
@@ -177,4 +208,9 @@ def add_book():
 
 # Run application
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=5000)
+    app.run(
+        debug=False,
+        host="0.0.0.0",
+        port=5000,
+        use_reloader=False
+    )
