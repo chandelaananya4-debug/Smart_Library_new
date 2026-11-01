@@ -13,19 +13,36 @@ DATA_FILE = Path(__file__).with_name("books.csv")
 
 # Load books from CSV
 def load_books():
-    if not DATA_FILE.exists():
-        return pd.DataFrame(
-            columns=["id", "title", "author", "category", "total", "available"]
-        )
-
+    
+def load_books():
     df = pd.read_csv(DATA_FILE)
 
+    # Clean column names
+    df.columns = df.columns.str.strip().str.lower()
+
+    # Handle alternative ID column names
+    df.rename(columns={
+        "book_id": "id",
+        "book id": "id"
+    }, inplace=True)
+
+    # Create ID column if it is missing
+    if "id" not in df.columns:
+        df.insert(0, "id", range(1, len(df) + 1))
+
+    # Ensure required columns exist
+    if "total" not in df.columns:
+        df["total"] = 0
+
+    if "available" not in df.columns:
+        df["available"] = df["total"]
+
+    # Convert numeric columns
     for col in ["id", "total", "available"]:
-        df[col] = pd.to_numeric(
-            df[col], errors="coerce"
-        ).fillna(0).astype(int)
+        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0).astype(int)
 
     return df
+
 
 
 # Save books to CSV
